@@ -1,4 +1,4 @@
-#Written by: Kacey Howell for United Heritage Company Name
+#Written by: BeholdenCypress for United Heritage Company Name
 
 # Get all users from AD, add them to a System.Array() using Username, Email Address, and Password Expiration date as a long date string and given the custom name of "PasswordExpiry"
 
