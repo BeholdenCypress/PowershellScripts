@@ -6,7 +6,7 @@ $CurrentDate = Get-Date -format "MMMM dd, yyyy"
 
 #Start Log File
 $VerbosePreference = "Continue"
-$LogPath = "C:\PasswordBot\Logs\PasswordBot.log"
+$LogPath = "C:\PasswordBot\Logs\$(Get-Date -Format yyyy-MM-dd).log"
 Get-ChildItem "$LogPath\*.log" | Where-Object LastWriteTime -LT (Get-Date).AddDays(-10) | Remove-Item -Confirm:$false
 Start-Transcript -Path $LogPath -Append
 
