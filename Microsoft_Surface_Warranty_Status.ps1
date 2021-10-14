@@ -1,12 +1,12 @@
-<#
-Synopsis: A script that queries the Config Manager DB for all Microsoft Serial keys, runs them against the Microsoft warranty API, and exports everything to a CSV
+if (Get-Module -ListAvailable -Name SqlServer) {
+    Import-Module -Name SqlServer
+} 
+else {
+    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+    Install-Module -Name SqlServer -Confirm:$False -Force
+}
 
-Portions of the script (mainly the parts for connecting with Microsoft's Rest API) were ripped and modified from https://www.cyberdrain.com/automating-with-powershell-automating-warranty-information-reporting/
-
-Made by BeholdenCypress in collaboration with Christopher Catlett (https://mdt2012.com/author/mdt2012/)
-#>
-
-$SQLSerials = Invoke-Sqlcmd -server SERVERNAME -Database ConfigManDB "SELECT
+$SQLSerials = Invoke-Sqlcmd -server MERSQL19PRD -Database CM_UH1 "SELECT
 vWorkstationStatus.Name AS 'Computer name',
 v_GS_COMPUTER_SYSTEM.Model0 AS 'Model',
 v_GS_PC_BIOS.SerialNumber0 AS 'Serialnumber'
@@ -18,7 +18,6 @@ WHERE
 (vWorkstationStatus.OperatingSystem not like N'%server %') and (v_GS_COMPUTER_SYSTEM.Manufacturer0 like N'Microsoft%') and (v_GS_COMPUTER_SYSTEM.Model0 not like N'Virtual%')
 Order by 'Computer name' ASC" | Select-Object -Property "Computer Name", "Model", "Serialnumber"
 
-$outputpath = "c:\CSV\results.csv"
 $results = [System.Collections.ArrayList]@()
 foreach($device in $SQLSerials)
     {
@@ -81,4 +80,15 @@ foreach($device in $SQLSerials)
     $info | Add-Member -MemberType NoteProperty -Name WarrantyStatus -Value $WarObj.'Warranty Status' -Force
 $results.Add($info)  
 }
-$results | export-csv -Path $outputpath -NoTypeInformation
+$ResultsHTML = $results | Sort-Object -Property WarrantyStatus | ConvertTo-Html | Out-String
+
+$MailSplat = @{
+    To          = "emailaddress@example.com"
+    From        = "emailaddress@example.com"
+    SmtpServer  = "emailrelay.companyname.com"
+    Subject     = "Microsoft Surface Warranty Status"
+    BodyAsHTML  = $true
+    Body        = $ResultsHTML
+}
+
+Send-MailMessage @MailSplat
