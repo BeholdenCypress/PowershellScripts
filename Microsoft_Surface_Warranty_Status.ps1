@@ -6,7 +6,7 @@ else {
     Install-Module -Name SqlServer -Confirm:$False -Force
 }
 
-$SQLSerials = Invoke-Sqlcmd -server MERSQL19PRD -Database CM_UH1 "SELECT
+$SQLSerials = Invoke-Sqlcmd -server SERVERNAME -Database CM_DB "SELECT
 vWorkstationStatus.Name AS 'Computer name',
 v_GS_COMPUTER_SYSTEM.Model0 AS 'Model',
 v_GS_PC_BIOS.SerialNumber0 AS 'Serialnumber'
