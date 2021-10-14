@@ -1,11 +1,15 @@
+# Import or install SQLServer and PSWriteHTML modules as well as minimum version of NuGet
 if (Get-Module -ListAvailable -Name SqlServer) {
     Import-Module -Name SqlServer
+    Import-Module PSWriteHTML
 } 
 else {
     Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
     Install-Module -Name SqlServer -Confirm:$False -Force
+    Install-Module -Name PsWriteHTML -Confirm:$False -Force
 }
 
+# Query SCCM DB for all Microosft serial numbers
 $SQLSerials = Invoke-Sqlcmd -server SERVERNAME -Database CM_DB "SELECT
 vWorkstationStatus.Name AS 'Computer name',
 v_GS_COMPUTER_SYSTEM.Model0 AS 'Model',
@@ -18,6 +22,7 @@ WHERE
 (vWorkstationStatus.OperatingSystem not like N'%server %') and (v_GS_COMPUTER_SYSTEM.Manufacturer0 like N'Microsoft%') and (v_GS_COMPUTER_SYSTEM.Model0 not like N'Virtual%')
 Order by 'Computer name' ASC" | Select-Object -Property "Computer Name", "Model", "Serialnumber"
 
+# Create an array list and add all devices to said array list
 $results = [System.Collections.ArrayList]@()
 foreach($device in $SQLSerials)
     {
@@ -26,6 +31,7 @@ foreach($device in $SQLSerials)
         SerialNumber = $Device.Serialnumber
         ForceRefresh = $false
     }
+    # Microsoft Reset API stuff
     $today = Get-Date
     $PublicKey = Invoke-RestMethod -Uri 'https://surfacewarrantyservice.azurewebsites.net/api/key' -Method Get
     $AesCSP = New-Object System.Security.Cryptography.AesCryptoServiceProvider 
@@ -45,6 +51,7 @@ foreach($device in $SQLSerials)
         Key  = $EncKey
     } | ConvertTo-Json
     
+    # Run each serial number against the Microsoft Warranty API and add to Custom PS Object
     $WarReq = Invoke-RestMethod -uri "https://surfacewarrantyservice.azurewebsites.net/api/v2/warranty" -Method POST -body $FullBody -ContentType "application/json"
     if ($WarReq.warranties) 
         {
@@ -71,7 +78,6 @@ foreach($device in $SQLSerials)
     
     $info = $null
     $info = new-object -typename PSCustomObject
-    
     $info | Add-Member -MemberType NoteProperty -Name ComputerName -Value $Device.'Computer Name' -Force
     $info | Add-Member -MemberType NoteProperty -Name Model -Value $Device.Model -Force  
     $info | Add-Member -MemberType NoteProperty -Name Serial -Value $Device.Serialnumber -Force 
@@ -80,15 +86,22 @@ foreach($device in $SQLSerials)
     $info | Add-Member -MemberType NoteProperty -Name WarrantyStatus -Value $WarObj.'Warranty Status' -Force
 $results.Add($info)  
 }
-$ResultsHTML = $results | Sort-Object -Property WarrantyStatus | ConvertTo-Html | Out-String
+# Usw the PSWriteHTML module to create a HTML table and export to a file
+$Results | Out-gridHTML -DisablePaging -FilePath ".\SurfaceWarrantyStatus.html" -PreventShowHTML
+$Body = "See Attachment"
 
 $MailSplat = @{
-    To          = "emailaddress@example.com"
-    From        = "emailaddress@example.com"
+    To          = "email@companyname.com"
+    From        = "noreply@companyname.com"
     SmtpServer  = "emailrelay.companyname.com"
     Subject     = "Microsoft Surface Warranty Status"
     BodyAsHTML  = $true
-    Body        = $ResultsHTML
+    Body        = $Body
+    Attachments = ".\SurfaceWarrantyStatus.html"
 }
 
+# Send email with HTML attachment to recipient
 Send-MailMessage @MailSplat
+
+# Delete local HTML file
+Remove-Item -Path ".\SurfaceWarrantyStatus.html"
